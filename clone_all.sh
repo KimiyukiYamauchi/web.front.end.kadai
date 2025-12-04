@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# set -x
+
 set -euo pipefail
 
 INPUT_FILE="clone.txt"
@@ -75,22 +77,38 @@ get_default_branch() {
   fi
 }
 
+
+# クローン先のベースディレクトリ
+DEST_BASE="./repos"
+mkdir -p "$DEST_BASE"
+
+
 while IFS= read -r line || [[ -n "$line" ]]; do
   # Skip empty lines and lines that start with #
   [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 
   repo_url="$(echo "$line" | xargs)"
 
-  # Extract student id like s24001 (first match)
-  student_id="$(echo "$repo_url" | grep -o 's[0-9]\{5\}' | head -n1 || true)"
+  # 学籍番号の元になる 25xxx を抽出
+  raw_id=$(echo "$repo_url" | grep -oE '[0-9]{5}')
 
-  if [[ -z "${student_id}" ]]; then
-    log "⚠️  学生番号が見つかりません: ${repo_url}"
-    log
+  if [[ -z "$raw_id" ]]; then
+    echo "⚠️ 学籍番号(25xxx)を抽出できません: $repo_url"
     continue
   fi
 
-  target_dir="${student_id}"
+  # 既に n または s が付いている形式もチェック（例: s25001, n25002）
+  prefixed_id=$(echo "$repo_url" | grep -oE '[ns]25[0-9]{3}' || true)
+
+  if [[ -n "$prefixed_id" ]]; then
+    # そのまま使う
+    student_id="$prefixed_id"
+  else
+    # n が付いていない場合は n を付与
+    student_id="n$raw_id"
+  fi
+
+  target_dir="$DEST_BASE/$student_id"
 
   if [[ -d "${target_dir}/.git" ]]; then
     log "📂  既存: ${target_dir} → 更新 & 全ブランチ作成"
@@ -136,5 +154,5 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     popd >/dev/null
   fi
 
-  log
+  
 done < "${INPUT_FILE}"
